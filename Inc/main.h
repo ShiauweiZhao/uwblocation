@@ -233,6 +233,8 @@
 #define NBL0_GPIO_Port GPIOE
 #define NBL1_Pin GPIO_PIN_1
 #define NBL1_GPIO_Port GPIOE
+#define DW_NSS_Pin GPIO_PIN_3
+#define DW_NSS_GPIO_Port GPIOE
 
 /* ########################## Assert Selection ############################## */
 /**

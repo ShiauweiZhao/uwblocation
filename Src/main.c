@@ -41,7 +41,8 @@
 #include "stm32f4xx_hal.h"
 
 /* USER CODE BEGIN Includes */
-
+#include "deca_device_api.h"
+#include "deca_regs.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -74,7 +75,7 @@ static void MX_SPI4_Init(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+int i =0;
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -99,12 +100,12 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
-
+    dwt_readdevid();
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
+i++;
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
