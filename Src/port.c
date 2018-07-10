@@ -21,11 +21,7 @@ void port_set_dw1000_fastrate(void)
 }
 
 
-void reset_DW1000(void)
-{
 
-
-}
 //sleep ms
 __INLINE void
 Sleep(uint32_t x)
@@ -35,4 +31,13 @@ Sleep(uint32_t x)
 void deca_sleep(uint32_t time_ms)
 {
     Sleep(time_ms);
+}
+
+
+void reset_DW1000(void)
+{
+    HAL_GPIO_WritePin(DW_RESET_GPIO_Port, DW_RESET_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(DW_RESET_GPIO_Port, DW_RESET_Pin, GPIO_PIN_SET);
+    deca_sleep(2);
+
 }

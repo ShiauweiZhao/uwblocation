@@ -67,7 +67,8 @@ void _Error_Handler(char *, int);
 
 #define DW_NSS_Pin GPIO_PIN_4
 #define DW_NSS_GPIO_Port GPIOE
-
+#define DW_RESET_Pin GPIO_PIN_3
+#define DW_RESET_GPIO_Port GPIOE
 
 #define Error_Handler() _Error_Handler(__FILE__, __LINE__)
 #ifdef __cplusplus
