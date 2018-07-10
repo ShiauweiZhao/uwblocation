@@ -5,4 +5,11 @@
 #ifndef UWBLOCATION_PORT_H
 #define UWBLOCATION_PORT_H
 
+#include "stm32f4xx_hal.h"
+
+
+void port_set_dw1000_slowrate(void);
+void port_set_dw1000_fastrate(void);
+void Sleep(uint32_t Delay);
+
 #endif //UWBLOCATION_PORT_H
