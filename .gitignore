@@ -1,3 +1,11 @@
 cmake-build-debug/
 .idea/*
 *.tmp
+.cproject
+.mxproject
+.project
+mx.scrath
+uwblocation.ioc
+
+##mac
+.DS_Store
