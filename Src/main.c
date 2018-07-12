@@ -69,6 +69,9 @@ static void MX_USART1_Init(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
+/* Inter-ranging delay period, in milliseconds. */
+#define RNG_DELAY_MS 1000
+
 /* Default communication configuration. We use here EVK1000's mode 4. See NOTE 1 below. */
 static dwt_config_t config = {
         2,               /* Channel number. */
@@ -88,11 +91,11 @@ static dwt_config_t config = {
 #define RX_ANT_DLY 16436
 
 /* Frames used in the ranging process. See NOTE 3 below. */
-static uint8 rx_poll_msg[] = {0x41, 0x88, 0, 0xCA, 0xDE, 'W', 'A', 'V', 'E', 0xE0, 0, 0};
-static uint8 tx_resp_msg[] = {0x41, 0x88, 0, 0xCA, 0xDE, 'V', 'E', 'W', 'A', 0xE1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+static uint8 tx_poll_msg[] = {0x41, 0x88, 0, 0xCA, 0xDE, 'W', 'A', 'V', 'E', 0xE0, 0, 0};
+static uint8 rx_resp_msg[] = {0x41, 0x88, 0, 0xCA, 0xDE, 'V', 'E', 'W', 'A', 0xE1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 /* Length of the common part of the message (up to and including the function code, see NOTE 3 below). */
 #define ALL_MSG_COMMON_LEN 10
-/* Index to access some of the fields in the frames involved in the process. */
+/* Indexes to access some of the fields in the frames defined above. */
 #define ALL_MSG_SN_IDX 2
 #define RESP_MSG_POLL_RX_TS_IDX 10
 #define RESP_MSG_RESP_TX_TS_IDX 14
@@ -100,9 +103,9 @@ static uint8 tx_resp_msg[] = {0x41, 0x88, 0, 0xCA, 0xDE, 'V', 'E', 'W', 'A', 0xE
 /* Frame sequence number, incremented after each transmission. */
 static uint8 frame_seq_nb = 0;
 
-/* Buffer to store received messages.
+/* Buffer to store received response message.
  * Its size is adjusted to longest frame that this example code is supposed to handle. */
-#define RX_BUF_LEN 12
+#define RX_BUF_LEN 20
 static uint8 rx_buffer[RX_BUF_LEN];
 
 /* Hold copy of status register state here for reference so that it can be examined at a debug breakpoint. */
@@ -113,17 +116,22 @@ static uint32 status_reg = 0;
 #define UUS_TO_DWT_TIME 65536
 
 /* Delay between frames, in UWB microseconds. See NOTE 1 below. */
-#define POLL_RX_TO_RESP_TX_DLY_UUS 500
+#define POLL_TX_TO_RESP_RX_DLY_UUS 140
+/* Receive response timeout. See NOTE 5 below. */
+#define RESP_RX_TIMEOUT_UUS 800
 
-/* Timestamps of frames transmission/reception.
- * As they are 40-bit wide, we need to define a 64-bit int type to handle them. */
-typedef unsigned long long uint64;
-static uint64 poll_rx_ts;
-static uint64 resp_tx_ts;
+/* Speed of light in air, in metres per second. */
+#define SPEED_OF_LIGHT 299702547
+
+/* Hold copies of computed time of flight and distance here for reference so that it can be examined at a debug breakpoint. */
+static double tof;
+static double distance;
+
+/* String used to display measured distance on LCD screen (16 characters maximum). */
+char dist_str[16] = {0};
 
 /* Declaration of static functions. */
-static uint64 get_rx_timestamp_u64(void);
-static void resp_msg_set_ts(uint8 *ts_field, const uint64 ts);
+static void resp_msg_get_ts(uint8 *ts_field, uint32 *ts);
 
 /* USER CODE END 0 */
 
@@ -163,6 +171,9 @@ int main(void)
   MX_SPI4_Init();
   MX_USART1_Init();
   /* USER CODE BEGIN 2 */
+    deca_sleep(2);
+    reset_DW1000();
+    deca_sleep(2);
     devid=dwt_readdevid();
     uprintf(&husart1,"devid %08x\n",devid);
     port_set_dw1000_slowrate();
@@ -178,6 +189,9 @@ int main(void)
 
     dwt_setrxantennadelay(RX_ANT_DLY);
     dwt_settxantennadelay(TX_ANT_DLY);
+
+    dwt_setrxaftertxdelay(POLL_TX_TO_RESP_RX_DLY_UUS);
+    dwt_setrxtimeout(RESP_RX_TIMEOUT_UUS);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -188,13 +202,24 @@ int main(void)
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-        dwt_rxenable(DWT_START_RX_IMMEDIATE);
+        /* Write frame data to DW1000 and prepare transmission. See NOTE 7 below. */
+        tx_poll_msg[ALL_MSG_SN_IDX] = frame_seq_nb;
+        dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_TXFRS);
+        dwt_writetxdata(sizeof(tx_poll_msg), tx_poll_msg, 0); /* Zero offset in TX buffer. */
+        dwt_writetxfctrl(sizeof(tx_poll_msg), 0, 1); /* Zero offset in TX buffer, ranging. */
 
-        /* Poll for reception of a frame or error/timeout. See NOTE 6 below. */
-        while (!((status_reg = dwt_read32bitreg(SYS_STATUS_ID)) & (SYS_STATUS_RXFCG | SYS_STATUS_ALL_RX_ERR)))
+        /* Start transmission, indicating that a response is expected so that reception is enabled automatically after the frame is sent and the delay
+         * set by dwt_setrxaftertxdelay() has elapsed. */
+        dwt_starttx(DWT_START_TX_IMMEDIATE | DWT_RESPONSE_EXPECTED);
+
+        /* We assume that the transmission is achieved correctly, poll for reception of a frame or error/timeout. See NOTE 8 below. */
+        while (!((status_reg = dwt_read32bitreg(SYS_STATUS_ID)) & (SYS_STATUS_RXFCG | SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR)))
         {
 
         };
+
+        /* Increment frame sequence number after transmission of the poll message (modulo 256). */
+        frame_seq_nb++;
 
         if (status_reg & SYS_STATUS_RXFCG)
         {
@@ -204,70 +229,50 @@ int main(void)
             dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_RXFCG);
 
             /* A frame has been received, read it into the local buffer. */
-            frame_len = dwt_read32bitreg(RX_FINFO_ID) & RX_FINFO_RXFL_MASK_1023;
-            if (frame_len <= RX_BUFFER_LEN)
+            frame_len = dwt_read32bitreg(RX_FINFO_ID) & RX_FINFO_RXFLEN_MASK;
+            if (frame_len <= RX_BUF_LEN)
             {
                 dwt_readrxdata(rx_buffer, frame_len, 0);
-                printUint8BufferChar(&husart1,rx_buffer,frame_len);
             }
 
-            /* Check that the frame is a poll sent by "SS TWR initiator" example.
+            /* Check that the frame is the expected response from the companion "SS TWR responder" example.
              * As the sequence number field of the frame is not relevant, it is cleared to simplify the validation of the frame. */
             rx_buffer[ALL_MSG_SN_IDX] = 0;
-            if (memcmp(rx_buffer, rx_poll_msg, ALL_MSG_COMMON_LEN) == 0)
+            if (memcmp(rx_buffer, rx_resp_msg, ALL_MSG_COMMON_LEN) == 0)
             {
-                uint32 resp_tx_time;
-                int ret;
+                uint32 poll_tx_ts, resp_rx_ts, poll_rx_ts, resp_tx_ts;
+                int32 rtd_init, rtd_resp;
 
-                /* Retrieve poll reception timestamp. */
-                poll_rx_ts = get_rx_timestamp_u64();
+                /* Retrieve poll transmission and response reception timestamps. See NOTE 9 below. */
+                poll_tx_ts = dwt_readtxtimestamplo32();
+                resp_rx_ts = dwt_readrxtimestamplo32();
 
-                /* Compute final message transmission time. See NOTE 7 below. */
-                resp_tx_time = (poll_rx_ts + (POLL_RX_TO_RESP_TX_DLY_UUS * UUS_TO_DWT_TIME)) >> 8;
-                dwt_setdelayedtrxtime(resp_tx_time);
+                /* Get timestamps embedded in response message. */
+                resp_msg_get_ts(&rx_buffer[RESP_MSG_POLL_RX_TS_IDX], &poll_rx_ts);
+                resp_msg_get_ts(&rx_buffer[RESP_MSG_RESP_TX_TS_IDX], &resp_tx_ts);
 
-                /* Response TX timestamp is the transmission time we programmed plus the antenna delay. */
-                resp_tx_ts = (((uint64)(resp_tx_time & 0xFFFFFFFEUL)) << 8) + TX_ANT_DLY;
+                /* Compute time of flight and distance. */
+                rtd_init = resp_rx_ts - poll_tx_ts;
+                rtd_resp = resp_tx_ts - poll_rx_ts;
 
-                /* Write all timestamps in the final message. See NOTE 8 below. */
-                resp_msg_set_ts(&tx_resp_msg[RESP_MSG_POLL_RX_TS_IDX], poll_rx_ts);
-                resp_msg_set_ts(&tx_resp_msg[RESP_MSG_RESP_TX_TS_IDX], resp_tx_ts);
+                tof = ((rtd_init - rtd_resp) / 2.0) * DWT_TIME_UNITS;
+                distance = tof * SPEED_OF_LIGHT;
 
-                /* Write and send the response message. See NOTE 9 below. */
-                tx_resp_msg[ALL_MSG_SN_IDX] = frame_seq_nb;
-                dwt_writetxdata(sizeof(tx_resp_msg), tx_resp_msg, 0); /* Zero offset in TX buffer. */
-                dwt_writetxfctrl(sizeof(tx_resp_msg), 0, 1); /* Zero offset in TX buffer, ranging. */
-                ret = dwt_starttx(DWT_START_TX_DELAYED);
-                uprintf(&husart1,"checkTxok %04x  ret = %d\n",checkTxOK,ret);
-
-                /* If dwt_starttx() returns an error, abandon this ranging exchange and proceed to the next one. See NOTE 10 below. */
-                if (ret == DWT_SUCCESS)
-                {
-                    /* Poll DW1000 until TX frame sent event set. See NOTE 6 below. */
-                    while (!(dwt_read32bitreg(SYS_STATUS_ID) & SYS_STATUS_TXFRS))
-                    {
-                        i++;
-                    };
-                    uprintf(&husart1,"  i = %d\r",i);
-                    i=0;
-                    /* Clear TXFRS event. */
-                    dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_TXFRS);
-
-                    /* Increment frame sequence number after transmission of the poll message (modulo 256). */
-                    frame_seq_nb++;
-                }
+                /* Display computed distance on LCD. */
+                uprintf(&husart1, "DIST: %3.2f m", distance);
             }
         }
         else
         {
-            /* Clear RX error events in the DW1000 status register. */
-            dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_ALL_RX_ERR);
+            /* Clear RX error/timeout events in the DW1000 status register. */
+            dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR);
 
             /* Reset RX to properly reinitialise LDE operation. */
             dwt_rxreset();
         }
 
-
+        /* Execute a delay between ranging exchanges. */
+        deca_sleep(RNG_DELAY_MS);
 
 
 
@@ -418,10 +423,10 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-static uint64 get_rx_timestamp_u64(void)
+static uint64_t get_rx_timestamp_u64(void)
 {
     uint8 ts_tab[5];
-    uint64 ts = 0;
+    uint64_t ts = 0;
     int i;
     dwt_readrxtimestamp(ts_tab);
     for (i = 4; i >= 0; i--)
@@ -443,7 +448,7 @@ static uint64 get_rx_timestamp_u64(void)
  *
  * @return none
  */
-static void resp_msg_set_ts(uint8 *ts_field, const uint64 ts)
+static void resp_msg_set_ts(uint8 *ts_field, const uint64_t ts)
 {
     int i;
     for (i = 0; i < RESP_MSG_TS_LEN; i++)
@@ -468,6 +473,16 @@ void _Error_Handler(char *file, int line)
     {
     }
   /* USER CODE END Error_Handler_Debug */
+}
+
+static void resp_msg_get_ts(uint8 *ts_field, uint32 *ts)
+{
+    int i;
+    *ts = 0;
+    for (i = 0; i < RESP_MSG_TS_LEN; i++)
+    {
+        *ts += ts_field[i] << (i * 8);
+    }
 }
 
 #ifdef  USE_FULL_ASSERT
