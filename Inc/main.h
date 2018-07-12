@@ -57,7 +57,10 @@
 /* #define USE_FULL_ASSERT    1U */
 
 /* USER CODE BEGIN Private defines */
-
+#define DW_NSS_Pin GPIO_PIN_4
+#define DW_NSS_GPIO_Port GPIOE
+#define DW_RESET_Pin GPIO_PIN_3
+#define DW_RESET_GPIO_Port GPIOE
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
@@ -65,10 +68,7 @@
 #endif
 void _Error_Handler(char *, int);
 
-#define DW_NSS_Pin GPIO_PIN_4
-#define DW_NSS_GPIO_Port GPIOE
-#define DW_RESET_Pin GPIO_PIN_3
-#define DW_RESET_GPIO_Port GPIOE
+
 
 #define Error_Handler() _Error_Handler(__FILE__, __LINE__)
 #ifdef __cplusplus
