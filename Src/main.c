@@ -113,7 +113,7 @@ static uint32 status_reg = 0;
 #define UUS_TO_DWT_TIME 65536
 
 /* Delay between frames, in UWB microseconds. See NOTE 1 below. */
-#define POLL_RX_TO_RESP_TX_DLY_UUS 330
+#define POLL_RX_TO_RESP_TX_DLY_UUS 500
 
 /* Timestamps of frames transmission/reception.
  * As they are 40-bit wide, we need to define a 64-bit int type to handle them. */
@@ -137,6 +137,7 @@ int main(void)
   /* USER CODE BEGIN 1 */
     int32  devid = 0;
     int ret;
+    int32_t i=0;
 
     // uint8  ret = 0;
   /* USER CODE END 1 */
@@ -162,6 +163,8 @@ int main(void)
   MX_SPI4_Init();
   MX_USART1_Init();
   /* USER CODE BEGIN 2 */
+    devid=dwt_readdevid();
+    uprintf(&husart1,"devid %08x\n",devid);
     port_set_dw1000_slowrate();
     if (dwt_initialise(DWT_LOADNONE) == DWT_ERROR)
     {
@@ -189,7 +192,9 @@ int main(void)
 
         /* Poll for reception of a frame or error/timeout. See NOTE 6 below. */
         while (!((status_reg = dwt_read32bitreg(SYS_STATUS_ID)) & (SYS_STATUS_RXFCG | SYS_STATUS_ALL_RX_ERR)))
-        { };
+        {
+
+        };
 
         if (status_reg & SYS_STATUS_RXFCG)
         {
@@ -203,6 +208,7 @@ int main(void)
             if (frame_len <= RX_BUFFER_LEN)
             {
                 dwt_readrxdata(rx_buffer, frame_len, 0);
+                printUint8BufferChar(&husart1,rx_buffer,frame_len);
             }
 
             /* Check that the frame is a poll sent by "SS TWR initiator" example.
@@ -232,14 +238,18 @@ int main(void)
                 dwt_writetxdata(sizeof(tx_resp_msg), tx_resp_msg, 0); /* Zero offset in TX buffer. */
                 dwt_writetxfctrl(sizeof(tx_resp_msg), 0, 1); /* Zero offset in TX buffer, ranging. */
                 ret = dwt_starttx(DWT_START_TX_DELAYED);
+                uprintf(&husart1,"checkTxok %04x  ret = %d\n",checkTxOK,ret);
 
                 /* If dwt_starttx() returns an error, abandon this ranging exchange and proceed to the next one. See NOTE 10 below. */
                 if (ret == DWT_SUCCESS)
                 {
                     /* Poll DW1000 until TX frame sent event set. See NOTE 6 below. */
                     while (!(dwt_read32bitreg(SYS_STATUS_ID) & SYS_STATUS_TXFRS))
-                    { };
-
+                    {
+                        i++;
+                    };
+                    uprintf(&husart1,"  i = %d\r",i);
+                    i=0;
                     /* Clear TXFRS event. */
                     dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_TXFRS);
 

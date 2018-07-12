@@ -558,9 +558,9 @@ extern "C" {
 /*offset 16 */
 #define CHAN_CTRL_DWSFD         0x00020000UL    /* Bit 17 This bit enables a non-standard DecaWave proprietary SFD sequence. */
 #define CHAN_CTRL_DWSFD_SHIFT   (17)
-#define CHAN_CTRL_TNSSFD        0x00100000UL    /* Bit 20 Non-standard SFD in the transmitter */
+#define CHAN_CTRL_TNSSFD        0x00100000UL    /* Bit 20 This bit enables the use of user-defined SFD when transmitting */
 #define CHAN_CTRL_TNSSFD_SHIFT  (20)
-#define CHAN_CTRL_RNSSFD        0x00200000UL    /* Bit 21 Non-standard SFD in the receiver */
+#define CHAN_CTRL_RNSSFD        0x00200000UL    /* Bit 21 This bit enables the use of user-defined SFD when receiving */
 #define CHAN_CTRL_RNSSFD_SHIFT  (21)
 
 
@@ -918,7 +918,6 @@ extern "C" {
 #define RF_CONF_RXEN_MASK       0x00200000UL   /* RX enable */
 #define RF_CONF_TXPOW_MASK      0x001F0000UL   /* turn on power all LDOs */
 #define RF_CONF_PLLEN_MASK      0x0000E000UL   /* enable PLLs */
-#define RF_CONF_PGMIXBIASEN_MASK    0x0000A700UL    /* Enable TX mixer bias and pulse gen */
 #define RF_CONF_TXBLOCKSEN_MASK 0x00001F00UL   /* enable TX blocks */
 #define RF_CONF_TXPLLPOWEN_MASK (RF_CONF_PLLEN_MASK | RF_CONF_TXPOW_MASK)
 #define RF_CONF_TXALLEN_MASK    (RF_CONF_TXEN_MASK | RF_CONF_TXPOW_MASK | RF_CONF_PLLEN_MASK | RF_CONF_TXBLOCKSEN_MASK)
@@ -951,28 +950,15 @@ extern "C" {
  * @brief Bit definitions for register TX_CAL
  * Refer to section 7.2.43 Register file: 0x2A – Transmitter Calibration block
 **/
-#define TX_CAL_ID                   0x2A        /* Transmitter calibration block */
-#define TX_CAL_LEN                  (52)
+#define TX_CAL_ID               0x2A            /* Transmitter calibration block */
+#define TX_CAL_LEN              (52)
 /* offset from TX_CAL_ID in bytes */
-#define TC_SARL_SAR_C               (0)         /* SAR control */
+#define TC_SARL_SAR_C		        (0)         /* SAR control */
 /*cause bug in register block TX_CAL, we need to read 1 byte in a time*/
 #define TC_SARL_SAR_LVBAT_OFFSET    (3)         /* Latest SAR reading for Voltage level */
 #define TC_SARL_SAR_LTEMP_OFFSET    (4)         /* Latest SAR reading for Temperature level */
-#define TC_SARW_SAR_WTEMP_OFFSET    0x06        /* SAR reading of Temperature level taken at last wakeup event */
-#define TC_SARW_SAR_WVBAT_OFFSET    0x07        /* SAR reading of Voltage level taken at last wakeup event */
-
-#define TC_PGCCTRL_OFFSET       0x08        /* Pulse Generator Calibration control */
-#define TC_PGCCTRL_LEN          (1)
-#define TC_PGCCTRL_CALSTART     0x01        /* Start PG cal procedure */
-#define TC_PGCCTRL_AUTOCAL      0x02        /* Starts a PG autocalibration loop */
-#define TC_PGCCTRL_TMEAS_MASK   0x3C        /* Mask to retrieve number of clock cycles over which to run PG cal counter */
-#define TC_PGCCTRL_ON_TX        0x40        /* Perform autocal on each TX enable */
-#define TC_PGCCTRL_DIR_CONV     0x80        /* Direction (converging) of autocal binary search */
-
-#define TC_PGCAL_STATUS_OFFSET      0x09    /* Status register from PG calibration block */
-#define TC_PGCAL_STATUS_LEN         (1)
-#define TC_PGCAL_STATUS_DELAY_MASK  0xFFF   /* Mask to retrieve PG delay count from calibration */
-
+#define TC_SARW_SAR_WTEMP_OFFSET    0x06            /* SAR reading of Temperature level taken at last wakeup event */
+#define TC_SARW_SAR_WVBAT_OFFSET    0x07            /* SAR reading of Voltage level taken at last wakeup event */
 /* offset from TX_CAL_ID in bytes */
 #define TC_PGDELAY_OFFSET       0x0B            /* Transmitter Calibration – Pulse Generator Delay */
 #define TC_PGDELAY_LEN          (1)
@@ -1063,8 +1049,8 @@ extern "C" {
 #define AON_ADDR_LPOSC_CAL_1    118     /* Address of low-power oscillator calibration value (lower byte) */
 
 /* offset from AON_ID in bytes */
-#define AON_CFG0_OFFSET             0x06    /* 32-bit configuration register for the always on block. */
-#define AON_CFG0_LEN                (4)
+#define AON_CFG0_OFFSET         0x06    /* 32-bit configuration register for the always on block. */
+#define AON_CFG0_LEN            (4)
 #define AON_CFG0_SLEEP_EN           0x00000001UL    /* This is the sleep enable configuration bit */
 #define AON_CFG0_WAKE_PIN           0x00000002UL    /* Wake using WAKEUP pin */
 #define AON_CFG0_WAKE_SPI           0x00000004UL    /* Wake using SPI access SPICSn */

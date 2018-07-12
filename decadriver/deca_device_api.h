@@ -59,10 +59,7 @@ typedef signed short int16;
 typedef signed long int32;
 #endif
 #endif
-
-#ifndef DWT_NUM_DW_DEV
-#define DWT_NUM_DW_DEV (1)
-#endif
+extern  uint16 checkTxOK  ;
 
 #define DWT_SUCCESS (0)
 #define DWT_ERROR   (-1)
@@ -149,7 +146,6 @@ typedef signed long int32;
 #define DWT_PRESRV_SLEEP 0x0100                      // PRES_SLEEP - on wakeup preserve sleep bit
 #define DWT_LOADOPSET    0x0080                      // ONW_L64P - on wakeup load operating parameter set for 64 PSR
 #define DWT_CONFIG       0x0040                      // ONW_LDC - on wakeup restore (load) the saved configurations (from AON array into HIF)
-#define DWT_LOADEUI      0x0008                      // ONW_LEUI - on wakeup load EUI
 #define DWT_RX_EN        0x0002                      // ONW_RX - on wakeup activate reception
 #define DWT_TANDV        0x0001                      // ONW_RADC - on wakeup run ADC to sample temperature and voltage sensor values
 
@@ -280,20 +276,6 @@ typedef struct
 /********************************************************************************************************************/
 /*                                                     API LIST                                                     */
 /********************************************************************************************************************/
-
-/*! ------------------------------------------------------------------------------------------------------------------
- * @fn dwt_setdevicedataptr()
- *
- * @brief This function sets the local data structure pointer to point to the structure in the local array as given by the index.
- *
- * input parameters
- * @param index    - selects the array object to point to. Must be within the array bounds, i.e. < DWT_NUM_DW_DEV
- *
- * output parameters
- *
- * returns DWT_SUCCESS for success, or DWT_ERROR for error
- */
-int dwt_setdevicedataptr(unsigned int index);
 
 /*! ------------------------------------------------------------------------------------------------------------------
  * @fn dwt_getpartid()
@@ -564,10 +546,11 @@ void dwt_writetxfctrl(uint16 txFrameLength, uint16 txBufferOffset, int ranging);
  * @brief This call initiates the transmission, input parameter indicates which TX mode is used see below
  *
  * input parameters:
- * @param mode - is a bitmask for which the following values can be combined to define the operation
- *               DWT_START_TX_IMMEDIATE (0)            - to begin transmission immediatelty.
- *               DWT_START_TX_DELAYED   (to set bit 0) - to begin TX at pre-configured delay time
- *               DWT_RESPONSE_EXPECTED  (to set bit 1) - to turn the receiver on automatically (after the TX) after a pre-programmed delay
+ * @param mode - if 0 immediate TX (no response expected)
+ *               if 1 delayed TX (no response expected)
+ *               if 2 immediate TX (response expected - so the receiver will be automatically turned on after TX is done)
+ *               if 3 delayed TX (response expected - so the receiver will be automatically turned on after TX is done)
+ *
  * output parameters
  *
  * returns DWT_SUCCESS for success, or DWT_ERROR for error (e.g. a delayed transmission will fail if the delayed time has passed)
@@ -1341,7 +1324,7 @@ void dwt_readeventcounters(dwt_deviceentcnts_t *counters);
  *
  * returns DWT_SUCCESS for success, or DWT_ERROR for error
  */
-int dwt_otpwriteandverify(uint32 value, uint16 address);
+uint32 dwt_otpwriteandverify(uint32 value, uint16 address);
 
 /*! ------------------------------------------------------------------------------------------------------------------
  * @fn dwt_setleds()
@@ -1473,54 +1456,6 @@ uint8 dwt_readwakeuptemp(void) ;
  * returns: 8-bit raw battery voltage sensor value
  */
 uint8 dwt_readwakeupvbat(void) ;
-
-/*! ------------------------------------------------------------------------------------------------------------------
- * @fn dwt_calcbandwidthtempadj()
- *
- * @brief this function determines the corrected bandwidth setting (PG_DELAY register setting)
- * of the DW1000 which changes over temperature.
- *
- * input parameters:
- * @param target_count - uint16 - the PG count target to reach in order to correct the bandwidth
- *
- * output parameters:
- *
- * returns: (uint32) The setting to be programmed into the PG_DELAY value
- */
-uint32 dwt_calcbandwidthtempadj(uint16 target_count);
-
-/*! ------------------------------------------------------------------------------------------------------------------
- * @fn dwt_calcpowertempadj()
- *
- * @brief this function determines the corrected power setting (TX_POWER setting) for the
- * DW1000 which changes over temperature.
- *
- * input parameters:
- * @param channel - uint8 - the channel at which compensation of power level will be applied
- * @param ref_powerreg - uint32 - the TX_POWER register value recorded when reference measurements were made
- * @param current_temperature - double - the current ambient temperature in degrees Celcius
- * @param reference_temperature - double - the temperature at which reference measurements were made
- * output parameters: None
- *
- * returns: (uint32) The corrected TX_POWER register value
- */
-uint32 dwt_calcpowertempadj(uint8 channel, uint32 ref_powerreg, double current_temperature, double reference_temperature);
-
-/*! ------------------------------------------------------------------------------------------------------------------
- * @fn dwt_calcpgcount()
- *
- * @brief this function calculates the value in the pulse generator counter register (PGC_STATUS) for a given PG_DELAY
- * This is used to take a reference measurement, and the value recorded as the reference is used to adjust the
- * bandwidth of the device when the temperature changes.
- *
- * input parameters:
- * @param pgdly - uint8 - the PG_DELAY to set (to control bandwidth), and to find the corresponding count value for
- * output parameters: None
- *
- * returns: (uint16) PGC_STATUS count value calculated from the provided PG_DELAY value - used as reference for later
- * bandwidth adjustments
- */
-uint16 dwt_calcpgcount(uint8 pgdly);
 
 /*! ------------------------------------------------------------------------------------------------------------------
  * @fn dwt_writetodevice()
@@ -1710,7 +1645,7 @@ void dwt_write8bitoffsetreg(int regFileID, int regOffset, uint8 regval);
  *
  * returns DWT_SUCCESS for success, or DWT_ERROR for error
  */
- int writetospi(uint16 headerLength, const uint8 *headerBuffer, uint32 bodylength, const uint8 *bodyBuffer);
+int writetospi(uint16 headerLength, const uint8 *headerBuffer, uint32 bodylength, const uint8 *bodyBuffer);
 
 /*! ------------------------------------------------------------------------------------------------------------------
  * @fn readfromspi()
@@ -1734,7 +1669,7 @@ void dwt_write8bitoffsetreg(int regFileID, int regOffset, uint8 regval);
  *
  * returns DWT_SUCCESS for success (and the position in the buffer at which data begins), or DWT_ERROR for error
  */
- int readfromspi(uint16 headerLength, const uint8 *headerBuffer, uint32 readlength, uint8 *readBuffer);
+int readfromspi(uint16 headerLength, const uint8 *headerBuffer, uint32 readlength, uint8 *readBuffer);
 
 // ---------------------------------------------------------------------------
 //
